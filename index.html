@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Ticker Display</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0f172a;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+        #root {
+            width: 100%;
+            height: 100%;
+            min-height: 64px; /* Minimum 128x64 support */
+        }
+        
+        /* Responsive text scaling */
+        .responsive-text {
+            font-size: clamp(8px, 2.5vw, 24px);
+        }
+        
+        .responsive-text-sm {
+            font-size: clamp(6px, 2vw, 18px);
+        }
+        
+        .responsive-text-xs {
+            font-size: clamp(5px, 1.5vw, 14px);
+        }
+        
+        /* Ensure proper scaling for very small screens */
+        @media (max-width: 240px) {
+            .responsive-text { font-size: 8px; }
+            .responsive-text-sm { font-size: 6px; }
+            .responsive-text-xs { font-size: 5px; }
+        }
+        
+        /* High contrast for small displays */
+        .high-contrast {
+            filter: contrast(1.2) brightness(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useEffect, useState, useRef } = React;
+
+        // Indian company data with simple emojis for small screens
+        const companyData = {
+            // NSE Stocks
+            'RELIANCE': { name: 'RIL', emoji: '🛢️', type: 'nse', color: 'bg-blue-600' },
+            'TCS': { name: 'TCS', emoji: '💻', type: 'nse', color: 'bg-blue-500' },
+            'INFY': { name: 'INFY', emoji: '👨‍💻', type: 'nse', color: 'bg-purple-600' },
+            'HDFCBANK': { name: 'HDFC', emoji: '🏦', type: 'nse', color: 'bg-blue-700' },
+            'HINDUNILVR': { name: 'HUL', emoji: '🧴', type: 'nse', color: 'bg-yellow-600' },
+            'ITC': { name: 'ITC', emoji: '📦', type: 'nse', color: 'bg-green-600' },
+            'SBIN': { name: 'SBI', emoji: '🇮🇳', type: 'nse', color: 'bg-blue-800' },
+            'BHARTIARTL': { name: 'AIR', emoji: '📡', type: 'nse', color: 'bg-red-600' },
+            
+            // BSE Stocks
+            'BSE:RELIANCE': { name: 'RIL-B', emoji: '🛢️', type: 'bse', color: 'bg-blue-600' },
+            'BSE:TCS': { name: 'TCS-B', emoji: '💻', type: 'bse', color: 'bg-blue-500' },
+            'BSE:INFY': { name: 'INFY-B', emoji: '👨‍💻', type: 'bse', color: 'bg-purple-600' },
+            'BSE:HDFCBANK': { name: 'HDFC-B', emoji: '🏦', type: 'bse', color: 'bg-blue-700' },
+            
+            // Precious Metals
+            'GOLD': { name: 'GOLD', emoji: '🟡', type: 'metal', color: 'bg-yellow-500' },
+            'SILVER': { name: 'SILVER', emoji: '⚪', type: 'metal', color: 'bg-gray-400' }
+        };
+
+        function StockTicker({
+            symbols = [
+                'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 
+                'GOLD', 'SILVER',
+                'BSE:RELIANCE', 'BSE:TCS', 'BSE:INFY', 'BSE:HDFCBANK',
+                'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL'
+            ],
+            apiKey = '',
+            refreshMs = 8000,
+            showChange = true
+        }) {
+            const [data, setData] = useState([]);
+            const mounted = useRef(true);
+
+            useEffect(() => {
+                mounted.current = true;
+                fetchAll();
+                const id = setInterval(fetchAll, refreshMs);
+                return () => {
+                    mounted.current = false;
+                    clearInterval(id);
+                };
+            }, [symbols.join(','), apiKey, refreshMs]);
+
+            async function fetchQuote(symbol) {
+                // For Gold and Silver
+                if (symbol === 'GOLD' || symbol === 'SILVER') {
+                    const basePrice = symbol === 'GOLD' ? 62000 : 75000;
+                    const price = +(basePrice + (Math.random() - 0.5) * 500).toFixed(2);
+                    const change = +(Math.random() * 200 - 100).toFixed(2);
+                    const changePct = +((change / price) * 100).toFixed(2);
+                    return { 
+                        symbol, 
+                        price, 
+                        change, 
+                        changePct, 
+                        time: Date.now(), 
+                        source: 'metal',
+                        type: 'metal'
+                    };
+                }
+
+                // For Indian stocks
+                if (!apiKey) {
+                    let basePrice;
+                    if (symbol.startsWith('BSE:')) {
+                        const baseSymbol = symbol.replace('BSE:', '');
+                        basePrice = getBasePrice(baseSymbol) * 0.99;
+                    } else {
+                        basePrice = getBasePrice(symbol);
+                    }
+                    
+                    const price = +(basePrice + (Math.random() - 0.5) * 50).toFixed(2);
+                    const change = +(Math.random() * 40 - 20).toFixed(2);
+                    const changePct = +((change / price) * 100).toFixed(2);
+                    return { 
+                        symbol, 
+                        price, 
+                        change, 
+                        changePct, 
+                        time: Date.now(), 
+                        source: 'mock',
+                        type: symbol.startsWith('BSE:') ? 'bse' : 'nse'
+                    };
+                }
+
+                try {
+                    throw new Error('API not configured');
+                } catch (err) {
+                    let basePrice = getBasePrice(symbol.replace('BSE:', ''));
+                    if (symbol.startsWith('BSE:')) {
+                        basePrice *= 0.99;
+                    }
+                    const price = +(basePrice + (Math.random() - 0.5) * 50).toFixed(2);
+                    const change = +(Math.random() * 40 - 20).toFixed(2);
+                    const changePct = +((change / price) * 100).toFixed(2);
+                    return { 
+                        symbol, 
+                        price, 
+                        change, 
+                        changePct, 
+                        time: Date.now(), 
+                        source: 'fallback',
+                        type: symbol.startsWith('BSE:') ? 'bse' : symbol === 'GOLD' || symbol === 'SILVER' ? 'metal' : 'nse'
+                    };
+                }
+            }
+
+            function getBasePrice(symbol) {
+                const basePrices = {
+                    'RELIANCE': 2500,
+                    'TCS': 3500,
+                    'INFY': 1600,
+                    'HDFCBANK': 1600,
+                    'HINDUNILVR': 2400,
+                    'ITC': 400,
+                    'SBIN': 600,
+                    'BHARTIARTL': 800
+                };
+                return basePrices[symbol] || 1000;
+            }
+
+            async function fetchAll() {
+                const results = await Promise.all(symbols.map(fetchQuote));
+                if (mounted.current) setData(results);
+            }
+
+            function fmt(n) {
+                if (n === null || n === undefined) return '--';
+                if (Math.abs(n) >= 1000) return n.toLocaleString('en-IN');
+                return n.toFixed(2);
+            }
+
+            const items = data.length
+                ? data
+                : symbols.map(s => ({ 
+                    symbol: s, 
+                    price: null, 
+                    change: null, 
+                    changePct: null,
+                    type: s.startsWith('BSE:') ? 'bse' : s === 'GOLD' || s === 'SILVER' ? 'metal' : 'nse'
+                }));
+
+            const StockItem = ({ it, index }) => {
+                const up = it.change > 0;
+                const down = it.change < 0;
+                const company = companyData[it.symbol];
+                const isMetal = it.type === 'metal';
+                const isBSE = it.type === 'bse';
+
+                return (
+                    <div
+                        key={`${it.symbol}-${index}`}
+                        className={`
+                            inline-flex items-center gap-2 px-3 py-1 rounded-lg mx-1 high-contrast
+                            ${isMetal ? 'bg-yellow-500/30 border border-yellow-400/50' : 
+                              isBSE ? 'bg-green-500/30 border border-green-400/50' : 
+                              'bg-slate-700/90 border border-slate-600/50'}
+                        `}
+                        style={{ minHeight: 'clamp(24px, 6vw, 48px)' }}
+                    >
+                        {/* Emoji Icon - Always visible and scalable */}
+                        <div className="flex-shrink-0 responsive-text">
+                            {company?.emoji || '📊'}
+                        </div>
+                        
+                        {/* Stock Info - Compact and bold */}
+                        <div className="flex items-center gap-2 flex-nowrap whitespace-nowrap">
+                            {/* Symbol */}
+                            <div className={`
+                                font-black responsive-text-sm
+                                ${isMetal ? 'text-yellow-200' : 
+                                  isBSE ? 'text-green-200' : 'text-white'}
+                            `}>
+                                {company?.name || it.symbol.replace('BSE:', '')}
+                            </div>
+                            
+                            {/* Price */}
+                            <div className={`
+                                font-black font-mono responsive-text-sm
+                                ${isMetal ? 'text-yellow-100' : 'text-white'}
+                            `}>
+                                {it.price ? `₹${fmt(it.price)}` : '--'}
+                            </div>
+                            
+                            {/* Change */}
+                            {showChange && (
+                                <div
+                                    className={`
+                                        font-black font-mono responsive-text-xs
+                                        ${up ? 'text-green-400' : down ? 'text-red-400' : 'text-gray-300'}
+                                    `}
+                                >
+                                    {it.change !== null ? 
+                                        `${up ? '+' : ''}${fmt(it.change)}` 
+                                        : '--'
+                                    }
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Exchange Badge - Very compact */}
+                        <div className={`
+                            font-black responsive-text-xs px-1 py-0.5 rounded
+                            ${isMetal ? 'bg-yellow-500/50 text-yellow-200' :
+                              isBSE ? 'bg-green-500/50 text-green-200' :
+                              'bg-blue-500/50 text-blue-200'}
+                        `}>
+                            {isMetal ? 'M' : isBSE ? 'B' : 'N'}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="w-full h-full bg-slate-900 p-2 high-contrast">
+                    <div className="overflow-hidden relative h-full">
+                        <div
+                            className="whitespace-nowrap flex gap-1 items-center absolute h-full animate-marquee"
+                            style={{ willChange: 'transform' }}
+                        >
+                            {items.concat(items).map((it, i) => (
+                                <StockItem key={`${it.symbol}-${i}`} it={it} index={i} />
+                            ))}
+                        </div>
+                    </div>
+
+                    <style>{`
+                        @keyframes marquee {
+                            0% { transform: translateX(0%); }
+                            100% { transform: translateX(-50%); }
+                        }
+                        .animate-marquee {
+                            animation: marquee 120s linear infinite;
+                        }
+                        
+                        /* Ultra-compact for 128x64 */
+                        @media (max-height: 64px) and (max-width: 128px) {
+                            .animate-marquee {
+                                animation: marquee 60s linear infinite;
+                            }
+                        }
+                        
+                        /* Responsive animation speed */
+                        @media (min-width: 400px) {
+                            .animate-marquee {
+                                animation: marquee 90s linear infinite;
+                            }
+                        }
+                        
+                        @media (min-width: 768px) {
+                            .animate-marquee {
+                                animation: marquee 60s linear infinite;
+                            }
+                        }
+                        
+                        @media (prefers-reduced-motion: reduce) {
+                            .animate-marquee { animation: none; }
+                        }
+                    `}</style>
+                </div>
+            );
+        }
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(
+            <StockTicker 
+                symbols={[
+                    'RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 
+                    'GOLD', 'SILVER',
+                    'BSE:RELIANCE', 'BSE:TCS', 'BSE:INFY', 'BSE:HDFCBANK',
+                    'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL'
+                ]}
+                refreshMs={10000}
+                showChange={true}
+            />
+        );
+    </script>
+</body>
+</html>
